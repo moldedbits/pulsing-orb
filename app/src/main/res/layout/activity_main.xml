@@ -11,6 +11,7 @@
     tools:context="com.moldedbits.pulsingorb.MainActivity">
 
     <com.moldedbits.pulsingorb.widget.FireFlies
+        android:id="@+id/flies"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 

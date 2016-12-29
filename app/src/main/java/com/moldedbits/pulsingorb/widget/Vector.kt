@@ -11,4 +11,8 @@ class Vector(var x: Float, var y: Float) {
         x = target.x
         y = target.y
     }
+
+    override fun toString(): String {
+        return "::$x $y::"
+    }
 }

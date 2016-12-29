@@ -12,7 +12,7 @@ class FireFlies : View {
     val flies: MutableList<Fly> = mutableListOf()
     val connections: MutableList<Connection> = mutableListOf()
 
-    val density: Float = 0.004f
+    val density: Float = 0.005f
 
     val distributionVariance: Float = 0.3f / density
 
@@ -70,7 +70,7 @@ class FireFlies : View {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec)
 
         if (!isInEditMode) {
-            // populateFlies()
+            populateFlies()
         }
     }
 
@@ -105,7 +105,7 @@ class FireFlies : View {
         // Populate connections
         connections.clear()
 
-        val connectionCount: Int = Math.sqrt(flies.size.toDouble()).toInt() * 3
+        val connectionCount: Int = Math.sqrt(flies.size.toDouble()).toInt() * 4
         for (i in 0..connectionCount) {
             val index = getRandomFlyIndexWithoutConnection()
             val firstFly = flies[index]
@@ -149,9 +149,13 @@ class FireFlies : View {
         flies
                 .filter { circle.contains(it.position) }
                 .forEach {
-                    it.targetPosition.set(circle.nearestPointOnCircumference(it.position))
-                    it.isMovingToTarget = true
+                    it.startMovingToTarget(circle.nearestPointOnCircumference(it.position),
+                            circle.center)
                 }
+
+        connections
+                .filter { it.first.targetPosition.distanceTo(it.second.targetPosition) > pairingRadius }
+                .forEach { connections.remove(it) }
     }
 
     override fun draw(canvas: Canvas?) {
@@ -168,22 +172,34 @@ class FireFlies : View {
     }
 
     inner class Fly(val position: Vector, val paint: Paint) {
-        val easing: Float = 0.01f
+        val easing: Float = 0.15f
         val radius: Float = 20f
         val noiseFactor: Float = 2f
 
+        val initialPosition: Vector = Vector(0f, 0f)
         val targetPosition: Vector = Vector(0f, 0f)
+        val centerPoint: Vector = Vector(0f, 0f)
 
         var isMovingToTarget = false
 
+        fun startMovingToTarget(targetPosition: Vector, centerPoint: Vector) {
+            initialPosition.set(position)
+            this.targetPosition.set(targetPosition)
+            this.centerPoint.set(centerPoint)
+            isMovingToTarget = true
+        }
+
         fun update() {
             if (isMovingToTarget) {
-
-                val dPos: Float = targetPosition.distanceTo(position)
+                val dPos: Float = targetPosition.distanceTo(initialPosition)
                 val theta: Double = Math.atan(((targetPosition.y - position.y) /
                         (targetPosition.x - position.x)).toDouble())
                 position.x += dPos * Math.cos(theta).toFloat() * easing
                 position.y += dPos * Math.sin(theta).toFloat() * easing
+
+                if (centerPoint.distanceTo(position) >= centerPoint.distanceTo(targetPosition)) {
+                    isMovingToTarget = false
+                }
             } else {
                 val noiseX: Float = (Math.random().toFloat() * 2 - 1) * noiseFactor
                 val noiseY: Float = (Math.random().toFloat() * 2 - 1) * noiseFactor
