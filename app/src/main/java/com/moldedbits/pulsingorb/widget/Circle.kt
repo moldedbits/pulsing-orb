@@ -20,8 +20,8 @@ class Circle(val center: Vector, val radius: Float) {
         val finalX: Float = ax+radius*((bx - ax) / distanceFromCenter)
         val finalY: Float = ay+radius*((by - ay) / distanceFromCenter)
 
-        Log.d("Circle", "Initial Point: ${point.x - center.x} ${point.y - center.y}")
-        Log.d("Circle", "Target Point: ${finalX - center.x} ${finalY - center.y}")
+//        Log.d("Circle", "Initial Point: ${point.x - center.x} ${point.y - center.y}")
+//        Log.d("Circle", "Target Point: ${finalX - center.x} ${finalY - center.y}")
 
         return Vector(finalX, finalY)
     }

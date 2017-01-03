@@ -14,7 +14,7 @@ class MainActivity : AppCompatActivity() {
 
         fireFlies = findViewById(R.id.flies) as FireFlies
         fireFlies?.setOnClickListener(
-                {fireFlies?.startPairing()}
+                {fireFlies?.showPairing()}
         )
     }
 }

@@ -11,6 +11,7 @@ import android.view.View
 class FireFlies : View {
     val flies: MutableList<Fly> = mutableListOf()
     val connections: MutableList<Connection> = mutableListOf()
+    val pairedFlies: MutableList<PairedFly> = mutableListOf()
 
     val density: Float = 0.005f
 
@@ -21,11 +22,18 @@ class FireFlies : View {
     val paint100: Paint = Paint()
     val paint75: Paint = Paint()
     val paint50: Paint = Paint()
+    val paint150: Paint = Paint()
+
+    var isPairing = false
+    var isPaired = false
+
+    var pairingCircle: Circle = Circle(Vector(0f, 0f), pairingRadius)
 
     init {
-        paint100.alpha = (255 * 0.5).toInt()
-        paint75.alpha = (255 * 0.35).toInt()
-        paint50.alpha = (255 * 0.2).toInt()
+        paint150.alpha = (255 * 0.4).toInt()
+        paint100.alpha = (255 * 0.2).toInt()
+        paint75.alpha = (255 * 0.1).toInt()
+        paint50.alpha = (255 * 0.05).toInt()
     }
 
     constructor(context: Context) : super(context)
@@ -143,19 +151,65 @@ class FireFlies : View {
         return connections.any { it.first == fly || it.second == fly }
     }
 
-    fun startPairing() {
+    fun showPairing() {
+        if (isPaired || isPairing) {
+            return
+        }
+
+        isPairing = true
+
         val center: Vector = Vector(width.toFloat() / 2, height.toFloat() / 2)
-        val circle: Circle = Circle(center, pairingRadius)
+        pairingCircle.center.set(center)
+
         flies
-                .filter { circle.contains(it.position) }
+                .filter { pairingCircle.contains(it.position) }
                 .forEach {
-                    it.startMovingToTarget(circle.nearestPointOnCircumference(it.position),
-                            circle.center)
+                    it.startMovingToTarget(pairingCircle.nearestPointOnCircumference(it.position))
                 }
 
         connections
                 .filter { it.first.targetPosition.distanceTo(it.second.targetPosition) > pairingRadius }
                 .forEach { connections.remove(it) }
+
+        post(showFirstPairedFly)
+    }
+
+    private val showFirstPairedFly: Runnable = Runnable {
+        val center: Vector = Vector(width.toFloat() / 2, height.toFloat() / 2)
+
+        val position = Vector(center.x - (Math.random() * 0.7f + 0.3f).toFloat() * pairingRadius * 0.6f,
+                center.y + (Math.random().toFloat() * 2 - 1) * pairingRadius * 0.1f)
+
+        pairedFlies.add(PairedFly(position, paint150, RangedValue(Vector(40f, 50f)),
+                zoomCompleteListener = object: PairedFlyZoomCompleteListener {
+                    override fun onZoomComplete() {
+                        showSecondPairedFly()
+                    }
+                }))
+    }
+
+    fun showSecondPairedFly() {
+        val center: Vector = Vector(width.toFloat() / 2, height.toFloat() / 2)
+
+        val position = Vector(center.x + (Math.random() * 0.7f + 0.3f).toFloat() * pairingRadius * 0.6f,
+                center.y + (Math.random().toFloat() * 2 - 1) * pairingRadius * 0.1f)
+
+        pairedFlies.add(PairedFly(position, paint150, RangedValue(Vector(40f, 50f)),
+                zoomCompleteListener = object: PairedFlyZoomCompleteListener {
+                    override fun onZoomComplete() {
+                        showPaired()
+                    }
+                }))
+    }
+
+    fun showPaired() {
+        if (!isPairing || isPaired) {
+            return
+        }
+
+        isPaired = true
+
+        connections.add(Connection(pairedFlies[0], pairedFlies[1], paint150))
     }
 
     override fun draw(canvas: Canvas?) {
@@ -169,35 +223,91 @@ class FireFlies : View {
         for (connection in connections) {
             connection.draw(canvas)
         }
+
+        for (pairedFly in pairedFlies) {
+            pairedFly.update()
+            pairedFly.draw(canvas)
+        }
     }
 
-    inner class Fly(val position: Vector, val paint: Paint) {
-        val easing: Float = 0.15f
-        val radius: Float = 20f
-        val noiseFactor: Float = 2f
+    interface PairedFlyZoomCompleteListener {
+        fun onZoomComplete()
+    }
+
+    inner class PairedFly(position: Vector, paint: Paint, radius: RangedValue,
+                          val zoomEasing: Float = 0.03f,
+                          val zoomCompleteListener: PairedFlyZoomCompleteListener? = null) :
+            Fly(position, paint, radius) {
+
+        var isZoomingIn: Boolean = true
+        var zoomRadius: Float = 0f
+
+        init {
+            noiseFactor = 0.5f
+        }
+
+        override fun update() {
+            if (isZoomingIn) {
+                val dPos: Float = radius.range.y - 0f
+                zoomRadius += dPos * zoomEasing
+
+                if (zoomRadius > radius.range.y) {
+                    isZoomingIn = false
+                    radius.value = radius.range.y
+
+                    zoomCompleteListener?.onZoomComplete()
+                }
+            } else {
+                super.update()
+            }
+        }
+
+        override fun draw(canvas: Canvas?) {
+            if (isZoomingIn) {
+                canvas?.drawCircle(position.x, position.y, zoomRadius, paint)
+            } else {
+                super.draw(canvas)
+            }
+        }
+    }
+
+    open inner class Fly(position: Vector, paint: Paint,
+                         radius: RangedValue = RangedValue(Vector(10f, 14f))) :
+            PulsingCircle(position, paint, radius) {
+
+        val easing: Float = 0.05f
+        open var noiseFactor: Float = 1f
 
         val initialPosition: Vector = Vector(0f, 0f)
         val targetPosition: Vector = Vector(0f, 0f)
-        val centerPoint: Vector = Vector(0f, 0f)
 
         var isMovingToTarget = false
+        var isStuckToTarget = false
 
-        fun startMovingToTarget(targetPosition: Vector, centerPoint: Vector) {
+        var stuckCounter: Int = 0
+        val STICK_DURATION: Int = 500
+
+        fun startMovingToTarget(targetPosition: Vector, stickAtTarget: Boolean = false) {
             initialPosition.set(position)
             this.targetPosition.set(targetPosition)
-            this.centerPoint.set(centerPoint)
             isMovingToTarget = true
+            isStuckToTarget = stickAtTarget
         }
 
-        fun update() {
+        override fun update() {
+            super.update()
             if (isMovingToTarget) {
                 val dPos: Float = targetPosition.distanceTo(initialPosition)
                 val theta: Double = Math.atan(((targetPosition.y - position.y) /
                         (targetPosition.x - position.x)).toDouble())
-                position.x += dPos * Math.cos(theta).toFloat() * easing
-                position.y += dPos * Math.sin(theta).toFloat() * easing
 
-                if (centerPoint.distanceTo(position) >= centerPoint.distanceTo(targetPosition)) {
+                val direction = if (targetPosition.x > initialPosition.x) 1 else -1
+
+                position.x += dPos * Math.cos(theta).toFloat() * easing * direction
+                position.y += dPos * Math.sin(theta).toFloat() * easing * direction
+
+                if (pairingCircle.center.distanceTo(position) >=
+                        pairingCircle.center.distanceTo(targetPosition)) {
                     isMovingToTarget = false
                 }
             } else {
@@ -206,19 +316,38 @@ class FireFlies : View {
 
                 position.x += noiseX
                 position.y += noiseY
-            }
-        }
 
-        fun draw(canvas: Canvas?) {
-            canvas?.drawCircle(position.x, position.y, radius, paint)
+                if (isStuckToTarget) {
+                    if (stuckCounter > STICK_DURATION) {
+                        isStuckToTarget = false
+                        return
+                    }
+
+                    stuckCounter++
+
+                    position.set(pairingCircle.nearestPointOnCircumference(position))
+                }
+            }
         }
     }
 
-    inner class Connection(val first: Fly, val second: Fly) {
+    open inner class PulsingCircle(val position: Vector, val paint: Paint,
+                                   val radius: RangedValue = RangedValue(Vector(15f, 25f))) {
+
+        open fun update() {
+            radius.update()
+        }
+
+        open fun draw(canvas: Canvas?) {
+            canvas?.drawCircle(position.x, position.y, radius.value, paint)
+        }
+    }
+
+    inner class Connection(val first: Fly, val second: Fly, val paint: Paint = paint75) {
 
         fun draw(canvas: Canvas?): Unit {
             canvas?.drawLine(first.position.x, first.position.y, second.position.x,
-                    second.position.y, paint75)
+                    second.position.y, paint)
         }
     }
 
