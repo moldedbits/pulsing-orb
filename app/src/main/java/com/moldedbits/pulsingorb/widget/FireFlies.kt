@@ -15,7 +15,7 @@ class FireFlies : View {
     val pairedFlies: MutableList<PairedFly> = mutableListOf()
     val pairedConnections: MutableList<PairedConnection> = mutableListOf()
 
-    val density: Float = 0.0045f
+    val density: Float = 0.0035f
 
     val distributionVariance: Float = 0.3f / density
 
@@ -23,10 +23,11 @@ class FireFlies : View {
     var pairingOuterRadius: Float = 0f
     val outerPairingFactor = 1.4f
 
-    val paint75: Paint = Paint()
-    val paint50: Paint = Paint()
-    val paint150: Paint = Paint()
+    val connectionThreshhold = 200f
 
+    val paintPaired: Paint = Paint()
+    val paintFlies: Paint = Paint()
+    val paintConnection: Paint = Paint()
     val paintThick: Paint = Paint()
 
     var isPairing = false
@@ -35,10 +36,9 @@ class FireFlies : View {
     var pairingCircle: Circle = Circle(Vector(0f, 0f), pairingRadius)
 
     init {
-        paint150.color = Color.parseColor("#AAAAAA")
-        paint75.color = Color.parseColor("#BBBBBB")
-        paint50.color = Color.parseColor("#CCCCCC")
-        paintThick.color = paint150.color
+        paintPaired.color = Color.parseColor("#C7C7C7")
+        paintFlies.color = Color.parseColor("#CFCFCF")
+        paintThick.color = paintPaired.color
         paintThick.style = Paint.Style.FILL_AND_STROKE
         paintThick.strokeWidth = 8f
     }
@@ -108,10 +108,9 @@ class FireFlies : View {
             while (positionX < width) {
 
                 noise = Math.random().toFloat()
-                val paint = if (noise < 0.5) paint75 else paint50
                 noise = (noise * 2 - 1) * distributionVariance
 
-                flies.add(Fly(Vector(positionX, positionY + noise), paint))
+                flies.add(Fly(Vector(positionX, positionY + noise), paintFlies))
 
                 positionX += (Math.random().toFloat() + 0.1f) * step
             }
@@ -119,26 +118,18 @@ class FireFlies : View {
             positionY += step
         }
 
-        // Populate connections
-        connections.clear()
-
-        val connectionCount: Int = Math.sqrt(flies.size.toDouble()).toInt() * 4
-        for (i in 0..connectionCount) {
-            val index = getRandomFlyIndexWithoutConnection()
-            val firstFly = flies[index]
-            val otherFly: Fly = getNearestFly(firstFly)
-            connections.add(Connection(firstFly, otherFly))
-        }
+        updateConnections()
     }
 
-    private fun getRandomFlyIndexWithoutConnection(): Int {
-        var index: Int = (Math.random() * flies.size).toInt()
+    fun updateConnections() {
+        connections.clear()
 
-        while (hasConnection(flies[index])) {
-            index = (Math.random() * flies.size).toInt()
+        for (fly in flies) {
+            val otherFly: Fly = getNearestFly(fly)
+            if (otherFly.position.distanceTo(fly.position) < connectionThreshhold) {
+                connections.add(Connection(fly, otherFly))
+            }
         }
-
-        return index
     }
 
     private fun getNearestFly(fly: Fly): Fly {
@@ -154,10 +145,6 @@ class FireFlies : View {
             }
         }
         return nearestFly
-    }
-
-    private fun hasConnection(fly: Fly) : Boolean {
-        return connections.any { it.first == fly || it.second == fly }
     }
 
     fun showPairing() {
@@ -192,7 +179,7 @@ class FireFlies : View {
         val position = Vector(center.x - (Math.random() * 0.7f + 0.3f).toFloat() * pairingRadius * 0.6f,
                 center.y + (Math.random().toFloat() * 2 - 1) * pairingRadius * 0.1f)
 
-        pairedFlies.add(PairedFly(position, paint150, RangedValue(Vector(40f, 50f)),
+        pairedFlies.add(PairedFly(position, paintPaired, RangedValue(Vector(40f, 50f)),
                 zoomCompleteListener = object: PairedFlyZoomCompleteListener {
                     override fun onZoomComplete() {
                         showSecondPairedFly()
@@ -206,7 +193,7 @@ class FireFlies : View {
         val position = Vector(center.x + (Math.random() * 0.7f + 0.3f).toFloat() * pairingRadius * 0.6f,
                 center.y + (Math.random().toFloat() * 2 - 1) * pairingRadius * 0.1f)
 
-        pairedFlies.add(PairedFly(position, paint150, RangedValue(Vector(40f, 50f)),
+        pairedFlies.add(PairedFly(position, paintPaired, RangedValue(Vector(40f, 50f)),
                 zoomCompleteListener = object: PairedFlyZoomCompleteListener {
                     override fun onZoomComplete() {
                         showPaired()
@@ -227,13 +214,20 @@ class FireFlies : View {
     override fun draw(canvas: Canvas?) {
         super.draw(canvas)
 
+        // First update all flies
         for (fly in flies) {
             fly.update()
-            fly.draw(canvas)
         }
 
+        updateConnections()
+
+        // Draw connections before flies as connections are translucent
         for (connection in connections) {
             connection.draw(canvas)
+        }
+
+        for (fly in flies) {
+            fly.draw(canvas)
         }
 
         for (pairedFly in pairedFlies) {
@@ -289,11 +283,11 @@ class FireFlies : View {
     }
 
     open inner class Fly(position: Vector, paint: Paint,
-                         radius: RangedValue = RangedValue(Vector(10f, 14f))) :
+                         radius: RangedValue = RangedValue(Vector(12f, 16f))) :
             PulsingCircle(position, paint, radius) {
 
         val easing: Float = 0.02f
-        open var noiseFactor: Float = 2f
+        open var noiseFactor: Float = 2.5f
 
         val initialPosition: Vector = Vector(0f, 0f)
         val targetPosition: Vector = Vector(0f, 0f)
@@ -366,15 +360,18 @@ class FireFlies : View {
         }
     }
 
-    inner class Connection(val first: Fly, val second: Fly, val paint: Paint = paint75) {
+    inner class Connection(val first: Fly, val second: Fly, val paint: Paint = paintConnection) {
 
         fun draw(canvas: Canvas?): Unit {
+
+            paint.alpha = ((1 - first.position.distanceTo(second.position) / connectionThreshhold)
+                    * 255 * 0.4f).toInt()
             canvas?.drawLine(first.position.x, first.position.y, second.position.x,
                     second.position.y, paint)
         }
     }
 
-    inner class PairedConnection(val first: Fly, val second: Fly, val paint: Paint = paint75) {
+    inner class PairedConnection(val first: Fly, val second: Fly, val paint: Paint = paintPaired) {
 
         var percentageComplete: Float = 0f
 
