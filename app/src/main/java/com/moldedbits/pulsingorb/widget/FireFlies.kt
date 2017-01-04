@@ -7,6 +7,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.os.Build
 import android.util.AttributeSet
+import android.util.TypedValue
 import android.view.View
 
 class FireFlies : View {
@@ -15,15 +16,22 @@ class FireFlies : View {
     val pairedFlies: MutableList<PairedFly> = mutableListOf()
     val pairedConnections: MutableList<PairedConnection> = mutableListOf()
 
-    val density: Float = 0.0035f
-
-    val distributionVariance: Float = 0.3f / density
+    var flyDistance: Float
+    var flyVariance: Float
 
     var pairingRadius: Float = 0f
     var pairingOuterRadius: Float = 0f
     val outerPairingFactor = 1.4f
 
-    val connectionThreshhold = 200f
+    var connectionThreshold: Float
+
+    var flyMinSize: Float
+    var flyMaxSize: Float
+    var pairedFlyMinSize: Float
+    var pairedFlyMaxSize: Float
+
+    var noiseFactor: Float
+    var noiseFactorLow: Float
 
     val paintPaired: Paint = Paint()
     val paintFlies: Paint = Paint()
@@ -40,29 +48,36 @@ class FireFlies : View {
         paintFlies.color = Color.parseColor("#CFCFCF")
         paintThick.color = paintPaired.color
         paintThick.style = Paint.Style.FILL_AND_STROKE
-        paintThick.strokeWidth = 8f
+
+
+        val r = resources
+
+        connectionThreshold = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 55f, r.displayMetrics)
+        flyDistance = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 80f, r.displayMetrics)
+        flyVariance = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 20f, r.displayMetrics)
+
+        flyMinSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 4f, r.displayMetrics)
+        flyMaxSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 5.33f, r.displayMetrics)
+        pairedFlyMinSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 13f, r.displayMetrics)
+        pairedFlyMaxSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 16f, r.displayMetrics)
+
+        noiseFactor = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 0.8f, r.displayMetrics)
+        noiseFactorLow = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 0.4f, r.displayMetrics)
+
+        val strokeWidth = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 3f, r.displayMetrics)
+        paintThick.strokeWidth = strokeWidth
     }
 
     constructor(context: Context) : super(context)
 
-    constructor(context: Context, attrs: AttributeSet) : super(context, attrs) {
-        init(attrs)
-    }
+    constructor(context: Context, attrs: AttributeSet) : super(context, attrs)
 
     constructor(context: Context, attrs: AttributeSet, defStyleAttr: Int) :
-            super(context, attrs, defStyleAttr) {
-        init(attrs)
-    }
+            super(context, attrs, defStyleAttr)
 
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)
     constructor(context: Context, attrs: AttributeSet, defStyleAttr: Int, defStyleRes: Int) :
-            super(context, attrs, defStyleAttr, defStyleRes) {
-        init(attrs)
-    }
-
-    private fun init(attrs: AttributeSet) {
-
-    }
+            super(context, attrs, defStyleAttr, defStyleRes)
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
@@ -95,27 +110,25 @@ class FireFlies : View {
         flies.clear()
 
         // Populate Flies
-        val step: Float = 1 / density
-
         val width: Float = measuredWidth.toFloat()
         val height: Float = measuredHeight.toFloat()
 
-        var positionX: Float = Math.random().toFloat() * step
-        var positionY: Float = Math.random().toFloat() * step
+        var positionX: Float = Math.random().toFloat() * flyDistance
+        var positionY: Float = Math.random().toFloat() * flyDistance
         var noise: Float
 
         while (positionY < height) {
             while (positionX < width) {
 
                 noise = Math.random().toFloat()
-                noise = (noise * 2 - 1) * distributionVariance
+                noise = (noise * 2 - 1) * flyVariance
 
                 flies.add(Fly(Vector(positionX, positionY + noise), paintFlies))
 
-                positionX += (Math.random().toFloat() + 0.1f) * step
+                positionX += (Math.random().toFloat() + 0.1f) * flyDistance
             }
-            positionX = Math.random().toFloat() * step
-            positionY += step
+            positionX = Math.random().toFloat() * flyDistance
+            positionY += flyDistance
         }
 
         updateConnections()
@@ -126,7 +139,7 @@ class FireFlies : View {
 
         for (fly in flies) {
             val otherFly: Fly = getNearestFly(fly)
-            if (otherFly.position.distanceTo(fly.position) < connectionThreshhold) {
+            if (otherFly.position.distanceTo(fly.position) < connectionThreshold) {
                 connections.add(Connection(fly, otherFly))
             }
         }
@@ -179,7 +192,7 @@ class FireFlies : View {
         val position = Vector(center.x - (Math.random() * 0.7f + 0.3f).toFloat() * pairingRadius * 0.6f,
                 center.y + (Math.random().toFloat() * 2 - 1) * pairingRadius * 0.1f)
 
-        pairedFlies.add(PairedFly(position, paintPaired, RangedValue(Vector(40f, 50f)),
+        pairedFlies.add(PairedFly(position, paintPaired, RangedValue(Vector(pairedFlyMinSize, pairedFlyMaxSize)),
                 zoomCompleteListener = object: PairedFlyZoomCompleteListener {
                     override fun onZoomComplete() {
                         showSecondPairedFly()
@@ -193,7 +206,7 @@ class FireFlies : View {
         val position = Vector(center.x + (Math.random() * 0.7f + 0.3f).toFloat() * pairingRadius * 0.6f,
                 center.y + (Math.random().toFloat() * 2 - 1) * pairingRadius * 0.1f)
 
-        pairedFlies.add(PairedFly(position, paintPaired, RangedValue(Vector(40f, 50f)),
+        pairedFlies.add(PairedFly(position, paintPaired, RangedValue(Vector(pairedFlyMinSize, pairedFlyMaxSize)),
                 zoomCompleteListener = object: PairedFlyZoomCompleteListener {
                     override fun onZoomComplete() {
                         showPaired()
@@ -254,7 +267,7 @@ class FireFlies : View {
         var zoomRadius: Float = 0f
 
         init {
-            noiseFactor = 0.5f
+            noiseFactor = noiseFactorLow
         }
 
         override fun update() {
@@ -283,11 +296,10 @@ class FireFlies : View {
     }
 
     open inner class Fly(position: Vector, paint: Paint,
-                         radius: RangedValue = RangedValue(Vector(12f, 16f))) :
+                         radius: RangedValue = RangedValue(Vector(flyMinSize, flyMaxSize))) :
             PulsingCircle(position, paint, radius) {
 
         val easing: Float = 0.02f
-        open var noiseFactor: Float = 2.5f
 
         val initialPosition: Vector = Vector(0f, 0f)
         val targetPosition: Vector = Vector(0f, 0f)
@@ -299,6 +311,8 @@ class FireFlies : View {
 
         var stuckCounter: Int = 0
         val STICK_DURATION: Int = 500
+
+        var noiseFactor: Float = this@FireFlies.noiseFactor
 
         fun startMovingToTarget(targetPosition: Vector, stickAtTarget: Boolean = false) {
             initialPosition.set(position)
@@ -364,7 +378,7 @@ class FireFlies : View {
 
         fun draw(canvas: Canvas?): Unit {
 
-            paint.alpha = ((1 - first.position.distanceTo(second.position) / connectionThreshhold)
+            paint.alpha = ((1 - first.position.distanceTo(second.position) / connectionThreshold)
                     * 255 * 0.4f).toInt()
             canvas?.drawLine(first.position.x, first.position.y, second.position.x,
                     second.position.y, paint)
