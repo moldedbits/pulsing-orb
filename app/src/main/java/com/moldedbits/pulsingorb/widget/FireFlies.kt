@@ -3,6 +3,7 @@ package com.moldedbits.pulsingorb.widget
 import android.annotation.TargetApi
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
 import android.os.Build
 import android.util.AttributeSet
@@ -12,6 +13,7 @@ class FireFlies : View {
     val flies: MutableList<Fly> = mutableListOf()
     val connections: MutableList<Connection> = mutableListOf()
     val pairedFlies: MutableList<PairedFly> = mutableListOf()
+    val pairedConnections: MutableList<PairedConnection> = mutableListOf()
 
     val density: Float = 0.005f
 
@@ -24,16 +26,21 @@ class FireFlies : View {
     val paint50: Paint = Paint()
     val paint150: Paint = Paint()
 
+    val paintThick: Paint = Paint()
+
     var isPairing = false
     var isPaired = false
 
     var pairingCircle: Circle = Circle(Vector(0f, 0f), pairingRadius)
 
     init {
-        paint150.alpha = (255 * 0.4).toInt()
-        paint100.alpha = (255 * 0.2).toInt()
-        paint75.alpha = (255 * 0.1).toInt()
-        paint50.alpha = (255 * 0.05).toInt()
+        paint150.color = Color.parseColor("#999999")
+        paint100.color = Color.parseColor("#AAAAAA")
+        paint75.color = Color.parseColor("#BBBBBB")
+        paint50.color = Color.parseColor("#CCCCCC")
+        paintThick.color = paint150.color
+        paintThick.style = Paint.Style.FILL_AND_STROKE
+        paintThick.strokeWidth = 8f
     }
 
     constructor(context: Context) : super(context)
@@ -209,7 +216,7 @@ class FireFlies : View {
 
         isPaired = true
 
-        connections.add(Connection(pairedFlies[0], pairedFlies[1], paint150))
+        pairedConnections.add(PairedConnection(pairedFlies[0], pairedFlies[1], paintThick))
     }
 
     override fun draw(canvas: Canvas?) {
@@ -227,6 +234,11 @@ class FireFlies : View {
         for (pairedFly in pairedFlies) {
             pairedFly.update()
             pairedFly.draw(canvas)
+        }
+
+        for (pairedConnection in pairedConnections) {
+            pairedConnection.update()
+            pairedConnection.draw(canvas)
         }
     }
 
@@ -351,5 +363,21 @@ class FireFlies : View {
         }
     }
 
+    inner class PairedConnection(val first: Fly, val second: Fly, val paint: Paint = paint75) {
 
+        var percentageComplete: Float = 0f
+
+        fun update() {
+            if (percentageComplete < 1f) {
+                percentageComplete += 0.02f
+            }
+        }
+
+        fun draw(canvas: Canvas?) {
+            val endX = (second.position.x - first.position.x) * percentageComplete + first.position.x
+            val endY = (second.position.y - first.position.y) * percentageComplete + first.position.y
+
+            canvas?.drawLine(first.position.x, first.position.y, endX, endY, paint)
+        }
+    }
 }
