@@ -1,8 +1,6 @@
 package com.moldedbits.pulsingorb.widget
 
-import android.util.Log
-
-class Circle(val center: Vector, val radius: Float) {
+class Circle(val center: Vector, var radius: Float) {
 
     fun contains(point: Vector) : Boolean {
         return center.distanceTo(point) < radius

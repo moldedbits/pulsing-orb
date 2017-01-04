@@ -19,7 +19,8 @@ class FireFlies : View {
 
     val distributionVariance: Float = 0.3f / density
 
-    val pairingRadius: Float = 1f / density * 2
+    var pairingRadius: Float = 0f
+    var pairingOuterRadius: Float = 0f
 
     val paint100: Paint = Paint()
     val paint75: Paint = Paint()
@@ -85,6 +86,8 @@ class FireFlies : View {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec)
 
         if (!isInEditMode) {
+            pairingRadius = measuredWidth * 0.3f
+            pairingOuterRadius = pairingRadius * 1.5f
             populateFlies()
         }
     }
@@ -166,10 +169,13 @@ class FireFlies : View {
         isPairing = true
 
         val center: Vector = Vector(width.toFloat() / 2, height.toFloat() / 2)
+        pairingCircle.radius = pairingRadius
         pairingCircle.center.set(center)
 
+        val outerPairingCircle = Circle(center, pairingOuterRadius)
+
         flies
-                .filter { pairingCircle.contains(it.position) }
+                .filter { outerPairingCircle.contains(it.position) }
                 .forEach {
                     it.startMovingToTarget(pairingCircle.nearestPointOnCircumference(it.position))
                 }
@@ -178,7 +184,7 @@ class FireFlies : View {
                 .filter { it.first.targetPosition.distanceTo(it.second.targetPosition) > pairingRadius }
                 .forEach { connections.remove(it) }
 
-        post(showFirstPairedFly)
+        postDelayed(showFirstPairedFly, 200)
     }
 
     private val showFirstPairedFly: Runnable = Runnable {
@@ -287,7 +293,7 @@ class FireFlies : View {
                          radius: RangedValue = RangedValue(Vector(10f, 14f))) :
             PulsingCircle(position, paint, radius) {
 
-        val easing: Float = 0.05f
+        val easing: Float = 0.02f
         open var noiseFactor: Float = 1f
 
         val initialPosition: Vector = Vector(0f, 0f)
@@ -295,6 +301,8 @@ class FireFlies : View {
 
         var isMovingToTarget = false
         var isStuckToTarget = false
+
+        var isMovingOutward = false
 
         var stuckCounter: Int = 0
         val STICK_DURATION: Int = 500
@@ -304,6 +312,9 @@ class FireFlies : View {
             this.targetPosition.set(targetPosition)
             isMovingToTarget = true
             isStuckToTarget = stickAtTarget
+
+            isMovingOutward = pairingCircle.center.distanceTo(targetPosition) >
+                    pairingCircle.center.distanceTo(initialPosition)
         }
 
         override fun update() {
@@ -318,8 +329,9 @@ class FireFlies : View {
                 position.x += dPos * Math.cos(theta).toFloat() * easing * direction
                 position.y += dPos * Math.sin(theta).toFloat() * easing * direction
 
-                if (pairingCircle.center.distanceTo(position) >=
-                        pairingCircle.center.distanceTo(targetPosition)) {
+                val positionFurther = pairingCircle.center.distanceTo(position) >=
+                        pairingCircle.center.distanceTo(targetPosition)
+                if ((isMovingOutward && positionFurther) || (!isMovingOutward && !positionFurther)) {
                     isMovingToTarget = false
                 }
             } else {
