@@ -15,14 +15,14 @@ class FireFlies : View {
     val pairedFlies: MutableList<PairedFly> = mutableListOf()
     val pairedConnections: MutableList<PairedConnection> = mutableListOf()
 
-    val density: Float = 0.005f
+    val density: Float = 0.0045f
 
     val distributionVariance: Float = 0.3f / density
 
     var pairingRadius: Float = 0f
     var pairingOuterRadius: Float = 0f
+    val outerPairingFactor = 1.4f
 
-    val paint100: Paint = Paint()
     val paint75: Paint = Paint()
     val paint50: Paint = Paint()
     val paint150: Paint = Paint()
@@ -35,8 +35,7 @@ class FireFlies : View {
     var pairingCircle: Circle = Circle(Vector(0f, 0f), pairingRadius)
 
     init {
-        paint150.color = Color.parseColor("#999999")
-        paint100.color = Color.parseColor("#AAAAAA")
+        paint150.color = Color.parseColor("#AAAAAA")
         paint75.color = Color.parseColor("#BBBBBB")
         paint50.color = Color.parseColor("#CCCCCC")
         paintThick.color = paint150.color
@@ -87,7 +86,7 @@ class FireFlies : View {
 
         if (!isInEditMode) {
             pairingRadius = measuredWidth * 0.3f
-            pairingOuterRadius = pairingRadius * 1.5f
+            pairingOuterRadius = pairingRadius * outerPairingFactor
             populateFlies()
         }
     }
@@ -109,7 +108,7 @@ class FireFlies : View {
             while (positionX < width) {
 
                 noise = Math.random().toFloat()
-                val paint = if (noise < 0.33) paint100 else if (noise < 0.66) paint75 else paint50
+                val paint = if (noise < 0.5) paint75 else paint50
                 noise = (noise * 2 - 1) * distributionVariance
 
                 flies.add(Fly(Vector(positionX, positionY + noise), paint))
@@ -294,7 +293,7 @@ class FireFlies : View {
             PulsingCircle(position, paint, radius) {
 
         val easing: Float = 0.02f
-        open var noiseFactor: Float = 1f
+        open var noiseFactor: Float = 2f
 
         val initialPosition: Vector = Vector(0f, 0f)
         val targetPosition: Vector = Vector(0f, 0f)
